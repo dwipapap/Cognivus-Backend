@@ -176,7 +176,7 @@ exports.googleCallback = (req, res) => {
   const user = req.user;
 
   //create JWT
-  const payload = { id: user.userid, username: user.username, role: roleMapping[role] };
+  const payload = { id: user.userid, username: user.username, role: roleMapping[user.roleid] };
   const token = generateToken(payload);
 
   res.json({ token, user });
