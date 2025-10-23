@@ -1,53 +1,59 @@
 const supabase = require('../config/supabase');
-const { report: payload } = require('../helper/payload.js');
-const storage = require('../models/reports.js');
-const bucket = 'reports';
 
-//get all reports
+// get all reports
 exports.getAll = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('tbreport_files')
-      .select();
+      .select('*'); // eksplisit, aman
 
     if (error) throw error;
 
     return res.status(200).json({
       success: true,
-      data
-
+      data,
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
       message: 'Error fetching report',
-      error: error.message
+      error: error.message,
     });
   }
 };
 
-//get reports by id
+// get report by id
 exports.getById = async (req, res) => {
   const { id } = req.params;
 
   try {
     const { data, error } = await supabase
       .from('tbreport_files')
-      .select()
+      .select('*')
       .eq('rfid', id)
       .single();
-    
-    if (error) throw error;
-    
-    res.status(200).json({
+
+    if (error) {
+      // Supabase akan beri error untuk .single() saat tidak ada row
+      // Tangani 404 dengan aman
+      if (error.code === 'PGRST116' || error.message?.toLowerCase().includes('no rows')) {
+        return res.status(404).json({
+          success: false,
+          message: 'Report not found',
+        });
+      }
+      throw error;
+    }
+
+    return res.status(200).json({
       success: true,
-      data: data
+      data,
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
       message: 'Error fetching report',
-      error: error.message
+      error: error.message,
     });
   }
 };

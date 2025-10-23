@@ -1,77 +1,78 @@
 const supabase = require('../config/supabase');
 const { program: payload } = require('../helper/payload');
-const { program: select } = require('../helper/fields');
+const { program: selectFields } = require('../helper/fields');
 
-//read all program data
+// read all program data
 exports.getAll = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('tbprogram')
-      .select(select);
-    
+      .select(selectFields);
+
     if (error) throw error;
-    
-    res.json({
+
+    return res.json({
       success: true,
-      data: data
+      data,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: 'Error fetching program',
-      error: error.message
+      message: 'Error fetching programs',
+      error: error.message,
     });
   }
 };
 
-//read program by id
+// read program by id
 exports.getById = async (req, res) => {
   const { id } = req.params;
 
   try {
     const { data, error } = await supabase
       .from('tbprogram')
-      .select(select)
+      .select(selectFields)
       .eq('programid', id)
-      .single();
-    
+      .single(); // tepat karena by id
+
     if (error) throw error;
-    
-    res.json({
+
+    return res.json({
       success: true,
-      data: data
+      data,
     });
   } catch (error) {
-    res.status(500).json({
+    const status = error.code === 'PGRST116' ? 404 : 500; // tidak ditemukan -> 404
+    return res.status(status).json({
       success: false,
-      message: 'Error fetching program',
-      error: error.message
+      message: status === 404 ? 'Program not found' : 'Error fetching program',
+      error: error.message,
     });
   }
 };
 
-//insert new program
+// insert new program
 exports.create = async (req, res) => {
   try {
+    const insert = payload(req.body);
 
-    const insert = payload(req.body)
-    
     const { data, error } = await supabase
       .from('tbprogram')
       .insert(insert)
-      .select();
-    
+      .select(selectFields)
+      .single(); // langsung objek
+
     if (error) throw error;
-    
-    res.status(201).json({
+
+    return res.status(201).json({
       success: true,
-      data: data[0]
+      data,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Error creating program',
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -80,64 +81,68 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const { id } = req.params;
-    const insert = payload(req.body);
-    
+    const changes = payload(req.body);
+
     const { data, error } = await supabase
       .from('tbprogram')
-      .update(insert)
+      .update(changes)
       .eq('programid', id)
-      .select();
-    
+      .select(selectFields)
+      .maybeSingle(); // null jika tidak ada baris
+
     if (error) throw error;
 
-    if (!data || data.length === 0) {
+    if (!data) {
       return res.status(404).json({
         success: false,
-        message: 'Program not found.'
+        message: 'Program not found',
       });
     }
-    
-    res.json({
+
+    return res.json({
       success: true,
-      data: data[0]
+      data,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Error updating program',
-      error: error.message
+      error: error.message,
     });
   }
 };
 
-// delete program instance
+// delete program
 exports.delete = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
+    // gunakan select agar tahu ada baris yang terhapus
     const { data, error } = await supabase
       .from('tbprogram')
       .delete()
-      .eq('programid', id);
-    
+      .eq('programid', id)
+      .select('programid')
+      .maybeSingle();
+
     if (error) throw error;
 
-    if (!data || data.length === 0) {
+    if (!data) {
       return res.status(404).json({
         success: false,
-        message: 'Program not found.'
+        message: 'Program not found',
       });
     }
-    
-    res.json({
+
+    return res.json({
       success: true,
-      message: 'program deleted successfully'
+      message: 'Program deleted successfully',
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: 'Error deleting lecturer',
-      error: error.message
+      message: 'Error deleting program',
+      error: error.message,
     });
   }
 };

@@ -2,75 +2,61 @@ const supabase = require('../config/supabase');
 const { price: payload } = require('../helper/payload');
 const { price: select } = require('../helper/fields');
 
-//read all price data
+// read all price data
 exports.getAll = async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('tbprice')
-      .select(select);
-    
+    const { data, error } = await supabase.from('tbprice').select(select);
     if (error) throw error;
-    
-    res.json({
-      success: true,
-      data: data
-    });
+
+    res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error fetching price',
-      error: error.message
+      error: error.message,
     });
   }
 };
 
-//read price by id
+// read price by id
 exports.getById = async (req, res) => {
   const { id } = req.params;
-
   try {
     const { data, error } = await supabase
       .from('tbprice')
       .select(select)
       .eq('priceid', id)
       .single();
-    
     if (error) throw error;
-    
-    res.json({
-      success: true,
-      data: data
-    });
+
+    res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error fetching price',
-      error: error.message
+      error: error.message,
     });
   }
 };
 
-//insert new price
+// insert new price
 exports.create = async (req, res) => {
   try {
-    const insert = payload(req.body)
-    
+    const insert = payload(req.body);
+
     const { data, error } = await supabase
       .from('tbprice')
       .insert(insert)
-      .select();
-    
+      .select(); // kembalikan row yang dibuat
+
     if (error) throw error;
-    
-    res.status(201).json({
-      success: true,
-      data: data[0]
-    });
+
+    res.status(201).json({ success: true, data: data[0] });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error creating price',
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -80,31 +66,28 @@ exports.update = async (req, res) => {
   try {
     const { id } = req.params;
     const insert = payload(req.body);
-    
+
     const { data, error } = await supabase
       .from('tbprice')
       .update(insert)
       .eq('priceid', id)
       .select();
-    
+
     if (error) throw error;
 
     if (!data || data.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Pricelist not found.'
+        message: 'Price not found.',
       });
     }
-    
-    res.json({
-      success: true,
-      data: data[0]
-    });
+
+    res.json({ success: true, data: data[0] });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error updating price',
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -113,30 +96,31 @@ exports.update = async (req, res) => {
 exports.delete = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const { data, error } = await supabase
       .from('tbprice')
       .delete()
-      .eq('priceid', id);
-    
+      .eq('priceid', id)
+      .select(); // penting: agar ada data row yang terhapus
+
     if (error) throw error;
 
     if (!data || data.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Pricelist not found.'
+        message: 'Price not found.',
       });
     }
-    
+
     res.json({
       success: true,
-      message: 'price deleted successfully'
+      message: 'price deleted successfully',
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error deleting lecturer',
-      error: error.message
+      message: 'Error deleting price',
+      error: error.message,
     });
   }
 };

@@ -1,69 +1,94 @@
-const pricesController = require('../../controllers/prices');
-const supabase = require('../../config/supabase');
+// src/test/controllers/prices.test.js
 
-// Mock dependencies
-jest.mock('../../config/supabase');
+// 1) Mock Supabase DULU (wajib sebelum require controller)
+jest.mock('../../config/supabase', () => {
+  const q = {
+    select: jest.fn(),
+    insert: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    eq: jest.fn(),
+    single: jest.fn(),
+  };
+  const from = jest.fn(() => q);
+  return { from, __q: q };
+});
+
+// 2) Baru require modul lain
+const supabase = require('../../config/supabase');
+const q = supabase.__q;
+const pricesController = require('../../controllers/prices');
 
 describe('Prices Controller', () => {
   let req, res;
 
   beforeEach(() => {
-    req = {
-      params: {},
-      body: {}
-    };
+    req = { params: {}, body: {} };
     res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn()
+      status: jest.fn(() => res),
+      json: jest.fn(),
     };
+
+    // Reset seluruh mock builder
+    Object.values(q).forEach(fn => fn.mockReset());
+    supabase.from.mockClear();
+
+    // Default agar aman untuk chaining saat tidak dioverride
+    q.eq.mockReturnValue(q);
+    q.select.mockReturnValue(q);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
+  // -------- getAll --------
   describe('getAll', () => {
-    it('should get all prices successfully', async () => {
+    it('berhasil mengambil semua price', async () => {
       const mockData = [{ priceid: 1, amount: 100 }];
-      supabase.from.mockResolvedValue({
-        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
-      });
+
+      supabase.from.mockReturnValueOnce(q);
+      q.select.mockResolvedValueOnce({ data: mockData, error: null });
 
       await pricesController.getAll(req, res);
 
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        data: mockData
+        data: mockData,
       });
     });
   });
 
+  // -------- getById --------
   describe('getById', () => {
-    it('should get price by id successfully', async () => {
+    it('berhasil mengambil price berdasarkan id', async () => {
       req.params.id = '1';
-      const mockData = { priceid: 1, amount: 100 };
-      supabase.from.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: mockData, error: null })
-      });
+      const row = { priceid: 1, amount: 100 };
+
+      supabase.from.mockReturnValueOnce(q);
+      q.select.mockReturnValueOnce(q);
+      q.eq.mockReturnValueOnce(q);
+      q.single.mockResolvedValueOnce({ data: row, error: null });
 
       await pricesController.getById(req, res);
 
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        data: mockData
+        data: row,
       });
     });
   });
 
+  // -------- create --------
   describe('create', () => {
-    it('should create price successfully', async () => {
+    it('berhasil membuat price', async () => {
       req.body = { amount: 100 };
-      const mockData = [{ priceid: 1, amount: 100 }];
-      supabase.from.mockResolvedValue({
-        insert: jest.fn().mockReturnThis(),
-        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
+      const rows = [{ priceid: 1, amount: 100 }];
+
+      supabase.from.mockReturnValueOnce(q);
+      // insert(...) -> object dengan .select() yang resolve {data, error}
+      q.insert.mockReturnValueOnce({
+        select: jest.fn().mockResolvedValue({ data: rows, error: null }),
       });
 
       await pricesController.create(req, res);
@@ -71,36 +96,42 @@ describe('Prices Controller', () => {
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        data: mockData[0]
+        data: rows[0],
       });
     });
   });
 
+  // -------- update --------
   describe('update', () => {
-    it('should update price successfully', async () => {
+    it('berhasil mengubah price', async () => {
       req.params.id = '1';
       req.body = { amount: 150 };
-      const mockData = [{ priceid: 1, amount: 150 }];
-      supabase.from.mockReturnValue({
-        update: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
+      const rows = [{ priceid: 1, amount: 150 }];
+
+      supabase.from.mockReturnValueOnce(q);
+      // update(...).eq(...).select() -> resolve sukses
+      q.update.mockReturnValueOnce({
+        eq: () => ({
+          select: () => Promise.resolve({ data: rows, error: null }),
+        }),
       });
 
       await pricesController.update(req, res);
 
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        data: mockData[0]
+        data: rows[0],
       });
     });
 
-    it('should return 404 if price not found', async () => {
+    it('mengembalikan 404 jika price tidak ditemukan', async () => {
       req.params.id = '1';
-      supabase.from.mockReturnValue({
-        update: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        select: jest.fn().mockResolvedValue({ data: [], error: null })
+
+      supabase.from.mockReturnValueOnce(q);
+      q.update.mockReturnValueOnce({
+        eq: () => ({
+          select: () => Promise.resolve({ data: [], error: null }),
+        }),
       });
 
       await pricesController.update(req, res);
@@ -108,24 +139,49 @@ describe('Prices Controller', () => {
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        message: 'Pricelist not found.'
+        message: 'Price not found.',
       });
     });
   });
 
+  // -------- delete --------
   describe('delete', () => {
-    it('should delete price successfully', async () => {
+    it('berhasil menghapus price', async () => {
       req.params.id = '1';
-      supabase.from.mockReturnValue({
-        delete: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({ data: [{ priceid: 1 }], error: null })
+
+      supabase.from.mockReturnValueOnce(q);
+      // delete(...).eq(...).select() -> resolve { data: [...] }
+      q.delete.mockReturnValueOnce({
+        eq: () => ({
+          select: () =>
+            Promise.resolve({ data: [{ priceid: 1 }], error: null }),
+        }),
       });
 
       await pricesController.delete(req, res);
 
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        message: 'price deleted successfully'
+        message: 'price deleted successfully',
+      });
+    });
+
+    it('mengembalikan 404 jika price tidak ditemukan saat delete', async () => {
+      req.params.id = '999';
+
+      supabase.from.mockReturnValueOnce(q);
+      q.delete.mockReturnValueOnce({
+        eq: () => ({
+          select: () => Promise.resolve({ data: [], error: null }),
+        }),
+      });
+
+      await pricesController.delete(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Price not found.',
       });
     });
   });

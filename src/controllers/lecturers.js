@@ -11,15 +11,12 @@ exports.getAll = async (req, res) => {
 
     if (error) throw error;
 
-    res.json({
-      success: true,
-      data: data
-    });
+    res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error fetching lecturer',
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -28,23 +25,20 @@ exports.getById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('tblecturer')
       .select(select)
       .eq('userid', id)
-      .single();  
+      .single();
 
     if (error) throw error;
 
-    res.json({
-      success: true,
-      data: data
-    });
+    res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error fetching lecturer',
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -53,26 +47,27 @@ exports.create = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    // --- Langkah 1: Buat entri di tabel 'tbuser' ---
     if (!username || !email || !password) {
-      return res.status(400).json({ success: false, message: 'Username, email, and password are required for the user account.' });
+      return res.status(400).json({
+        success: false,
+        message: 'Username, email, and password are required for the user account.',
+      });
     }
 
-    const encrypted_password = await hashPassword(password)
+    const encrypted_password = await hashPassword(password);
 
     const { data: newUser, error: userError } = await supabase
       .from('tbuser')
-      .insert({
-        username,
-        email,
-        'password': encrypted_password,
-        roleid: 2
-      })
+      .insert({ username, email, password: encrypted_password, roleid: 2 })
       .select('userid')
       .single();
 
     if (userError) {
-      return res.status(409).json({ success: false, message: 'Error creating user account.', error: userError.message });
+      return res.status(409).json({
+        success: false,
+        message: 'Error creating user account.',
+        error: userError.message,
+      });
     }
 
     const insert = { ...payload(req.body), userid: newUser.userid };
@@ -84,25 +79,23 @@ exports.create = async (req, res) => {
       .single();
 
     if (lecturerError) {
-      return res.status(500).json({ success: false, message: 'User account created, but failed to create lecturer profile.', error: lecturerError.message });
+      return res.status(500).json({
+        success: false,
+        message: 'User account created, but failed to create lecturer profile.',
+        error: lecturerError.message,
+      });
     }
 
-    res.status(201).json({
-      success: true,
-      data: newLecturer
-    });
-
+    res.status(201).json({ success: true, data: newLecturer });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error creating lecturer',
-      error: error.message
+      error: error.message,
     });
   }
 };
 
-
-//lecturer data update
 exports.update = async (req, res) => {
   try {
     const { id } = req.params;
@@ -117,26 +110,19 @@ exports.update = async (req, res) => {
     if (error) throw error;
 
     if (!data || data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lecturer not found.'
-      });
+      return res.status(404).json({ success: false, message: 'Lecturer not found.' });
     }
 
-    res.json({
-      success: true,
-      data: data[0]
-    });
+    res.json({ success: true, data: data[0] });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error updating lecturer',
-      error: error.message
+      error: error.message,
     });
   }
 };
 
-// Delete lecturer
 exports.delete = async (req, res) => {
   try {
     const { id } = req.params;
@@ -149,26 +135,20 @@ exports.delete = async (req, res) => {
     if (error) throw error;
 
     if (!data || data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lecturer not found.'
-      });
+      return res.status(404).json({ success: false, message: 'Lecturer not found.' });
     }
 
-    const { data: userData, error: userError } = await supabase
-      .from('tbuser')
-      .delete()
-      .eq('userid', id);
+    await supabase.from('tbuser').delete().eq('userid', id);
 
     res.json({
       success: true,
-      message: 'Lecturer and associated user account deleted successfully'
+      message: 'Lecturer and associated user account deleted successfully',
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error deleting lecturer',
-      error: error.message
+      error: error.message,
     });
   }
-}; 
+};

@@ -1,21 +1,39 @@
+// src/test/controllers/levels.test.js
 const levelsController = require('../../controllers/levels');
-const supabase = require('../../config/supabase');
 
-// Mock dependencies
-jest.mock('../../config/supabase');
+// Chainable Supabase mock
+jest.mock('../../config/supabase', () => {
+  const q = {
+    select: jest.fn(),
+    insert: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    eq: jest.fn(),
+    single: jest.fn(),
+  };
+  const from = jest.fn(() => q);
+  return { from, __q: q };
+});
+
+const supabase = require('../../config/supabase');
+const q = supabase.__q;
 
 describe('Levels Controller', () => {
   let req, res;
 
   beforeEach(() => {
-    req = {
-      params: {},
-      body: {}
-    };
+    req = { params: {}, body: {} };
     res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn()
+      status: jest.fn(() => res),
+      json: jest.fn(),
     };
+
+    Object.values(q).forEach(fn => fn.mockReset());
+    supabase.from.mockClear();
+
+    // allow chaining by default
+    q.eq.mockReturnValue(q);
+    q.select.mockReturnValue(q);
   });
 
   afterEach(() => {
@@ -25,15 +43,15 @@ describe('Levels Controller', () => {
   describe('getAll', () => {
     it('should get all levels successfully', async () => {
       const mockData = [{ levelid: 1, level_name: 'Level1' }];
-      supabase.from.mockResolvedValue({
-        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
-      });
+
+      supabase.from.mockReturnValueOnce(q);
+      q.select.mockResolvedValueOnce({ data: mockData, error: null });
 
       await levelsController.getAll(req, res);
 
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        data: mockData
+        data: mockData,
       });
     });
   });
@@ -42,17 +60,17 @@ describe('Levels Controller', () => {
     it('should get level by id successfully', async () => {
       req.params.id = '1';
       const mockData = { levelid: 1, level_name: 'Level1' };
-      supabase.from.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: mockData, error: null })
-      });
+
+      supabase.from.mockReturnValueOnce(q);
+      q.select.mockReturnValueOnce(q);
+      q.eq.mockReturnValueOnce(q);
+      q.single.mockResolvedValueOnce({ data: mockData, error: null });
 
       await levelsController.getById(req, res);
 
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        data: mockData
+        data: mockData,
       });
     });
   });
@@ -61,9 +79,10 @@ describe('Levels Controller', () => {
     it('should create level successfully', async () => {
       req.body = { level_name: 'New Level' };
       const mockData = [{ levelid: 1, level_name: 'New Level' }];
-      supabase.from.mockResolvedValue({
-        insert: jest.fn().mockReturnThis(),
-        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
+
+      supabase.from.mockReturnValueOnce(q);
+      q.insert.mockReturnValueOnce({
+        select: jest.fn().mockResolvedValue({ data: mockData, error: null }),
       });
 
       await levelsController.create(req, res);
@@ -71,7 +90,7 @@ describe('Levels Controller', () => {
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        data: mockData[0]
+        data: mockData[0],
       });
     });
   });
@@ -81,26 +100,32 @@ describe('Levels Controller', () => {
       req.params.id = '1';
       req.body = { level_name: 'Updated Level' };
       const mockData = [{ levelid: 1, level_name: 'Updated Level' }];
-      supabase.from.mockReturnValue({
-        update: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
+
+      supabase.from.mockReturnValueOnce(q);
+      q.update.mockReturnValueOnce({
+        eq: () => ({
+          select: () =>
+            Promise.resolve({ data: mockData, error: null }),
+        }),
       });
 
       await levelsController.update(req, res);
 
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        data: mockData[0]
+        data: mockData[0],
       });
     });
 
     it('should return 404 if level not found', async () => {
       req.params.id = '1';
-      supabase.from.mockReturnValue({
-        update: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        select: jest.fn().mockResolvedValue({ data: [], error: null })
+
+      supabase.from.mockReturnValueOnce(q);
+      q.update.mockReturnValueOnce({
+        eq: () => ({
+          select: () =>
+            Promise.resolve({ data: [], error: null }),
+        }),
       });
 
       await levelsController.update(req, res);
@@ -108,7 +133,7 @@ describe('Levels Controller', () => {
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        message: 'Level not found.'
+        message: 'Level not found.',
       });
     });
   });
@@ -116,16 +141,21 @@ describe('Levels Controller', () => {
   describe('delete', () => {
     it('should delete level successfully', async () => {
       req.params.id = '1';
-      supabase.from.mockReturnValue({
-        delete: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({ data: [{ levelid: 1 }], error: null })
+
+      supabase.from.mockReturnValueOnce(q);
+      // IMPORTANT: support .select() after .eq()
+      q.delete.mockReturnValueOnce({
+        eq: () => ({
+          select: () =>
+            Promise.resolve({ data: [{ levelid: 1 }], error: null }),
+        }),
       });
 
       await levelsController.delete(req, res);
 
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        message: 'user deleted successfully'
+        message: 'level deleted successfully', // matches your controller text
       });
     });
   });
