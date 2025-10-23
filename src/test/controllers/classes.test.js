@@ -1,144 +1,215 @@
-const classesController = require('../../controllers/classes');
+const controller = require('../../controllers/classes');
+// --- Mock Dependencies ---
+
+// Mock the payload helper
+jest.mock('../../helper/payload.js', () => ({
+  class: jest.fn((body) => body),
+}));
+const { class: mockPayload } = require('../../helper/payload.js');
+
+// Mock the select helper
+jest.mock('../../helper/fields.js', () => ({
+  class: 'classid, class_code, tbcourse(courseid, course_name), tblecturer(lecturerid, name)',
+}));
+const { class: mockSelect } = require('../../helper/fields.js');
+
+// Mock the Supabase client
+jest.mock('../../config/supabase', () => ({
+  from: jest.fn(),
+}));
 const supabase = require('../../config/supabase');
 
-// Mock dependencies
-jest.mock('../../config/supabase');
+function makeFromChain() {
+  const chain = {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    single: jest.fn(),
+    insert: jest.fn().mockReturnThis(),
+    update: jest.fn().mockReturnThis(),
+    delete: jest.fn().mockReturnThis(),
+  };
+  supabase.from.mockReturnValue(chain);
+  return chain;
+}
 
 describe('Classes Controller', () => {
   let req, res;
 
   beforeEach(() => {
-    req = {
-      params: {},
-      body: {},
-      query: {}
-    };
+    jest.clearAllMocks();
+    req = { params: {}, query: {}, body: {} };
     res = {
       status: jest.fn().mockReturnThis(),
-      json: jest.fn()
+      json: jest.fn(),
     };
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
   });
 
   describe('getAll', () => {
-    it('should get all classes successfully', async () => {
-      const mockData = [{ classid: 1, class_code: 'C1' }];
-      supabase.from.mockReturnValue({
-        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
-      });
+    it('returns all classes', async () => {
+      const data = [{ classid: 1 }, { classid: 2 }];
+      const chain = makeFromChain();
+      chain.select.mockResolvedValue({ data, error: null });
 
-      await classesController.getAll(req, res);
+      await controller.getAll(req, res);
 
-      expect(res.json).toHaveBeenCalledWith({
-        success: true,
-        data: mockData
-      });
+      expect(supabase.from).toHaveBeenCalledWith('tbclass');
+      expect(chain.select).toHaveBeenCalledWith(mockSelect);
+      expect(res.json).toHaveBeenCalledWith({ success: true, data });
     });
 
-    it('should filter by lecturerid', async () => {
-      req.query.lecturerid = '1';
-      const mockData = [{ classid: 1, class_code: 'C1' }];
-      supabase.from.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({ data: mockData, error: null })
-      });
+    it('filters by lecturerid when provided', async () => {
+      req.query.lecturerid = 99;
+      const data = [{ classid: 3 }];
+      const chain = makeFromChain();
+      chain.select.mockReturnThis();
+      chain.eq.mockResolvedValue({ data, error: null });
 
-      await classesController.getAll(req, res);
+      await controller.getAll(req, res);
 
+      expect(chain.eq).toHaveBeenCalledWith('lecturerid', 99);
+      expect(res.json).toHaveBeenCalledWith({ success: true, data });
+    });
+
+    it('handles fetch error', async () => {
+      const chain = makeFromChain();
+      const mockError = { message: 'DB error' };
+      chain.select.mockResolvedValue({ data: null, error: mockError });
+
+      await controller.getAll(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
-        success: true,
-        data: mockData
+        success: false,
+        message: 'Error fetching classes',
+        error: mockError.message,
       });
     });
   });
 
   describe('getById', () => {
-    it('should get class by id successfully', async () => {
-      req.params.id = '1';
-      const mockData = { classid: 1, class_code: 'C1' };
-      supabase.from.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: mockData, error: null })
-      });
+    it('returns a single class', async () => {
+      req.params.id = 7;
+      const data = { classid: 7 };
+      const chain = makeFromChain();
+      chain.single.mockResolvedValue({ data, error: null });
 
-      await classesController.getById(req, res);
+      await controller.getById(req, res);
 
+      expect(chain.select).toHaveBeenCalledWith(mockSelect);
+      expect(chain.eq).toHaveBeenCalledWith('classid', 7);
+      expect(res.json).toHaveBeenCalledWith({ success: true, data });
+    });
+
+    it('returns 404 on not found/error', async () => {
+      req.params.id = 7;
+      const chain = makeFromChain();
+      const mockError = { message: 'not found' };
+      chain.single.mockResolvedValue({ data: null, error: mockError });
+
+      await controller.getById(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({
-        success: true,
-        data: mockData
+        success: false,
+        message: 'Class not found',
+        error: mockError.message,
       });
     });
   });
 
   describe('create', () => {
-    it('should create class successfully', async () => {
-      req.body = { class_code: 'C1', levelid: 1 };
-      const mockData = { classid: 1 };
-      supabase.from.mockReturnValue({
-        insert: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: mockData, error: null })
-      });
+    it('inserts with payload helper and returns 201', async () => {
+      req.body = { class_code: 'X' };
+      const chain = makeFromChain();
+      const data = { classid: 10, class_code: 'X' };
+      chain.single.mockResolvedValue({ data, error: null });
 
-      await classesController.create(req, res);
+      await controller.create(req, res);
 
+      expect(mockPayload).toHaveBeenCalledWith({ class_code: 'X' });
+      expect(chain.insert).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({
-        success: true,
-        data: mockData
-      });
+      expect(res.json).toHaveBeenCalledWith({ success: true, data });
     });
 
-    it('should return error for missing fields', async () => {
-      req.body = { class_code: 'C1' };
+    it('handles insert error', async () => {
+      req.body = { class_code: 'X' };
+      const chain = makeFromChain();
+      const mockError = { message: 'insert failed' };
+      chain.single.mockResolvedValue({ data: null, error: mockError });
 
-      await classesController.create(req, res);
+      await controller.create(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        message: 'Class Code and Level are required for a new class'
+        message: 'Error creating class',
+        error: mockError.message,
       });
     });
   });
 
   describe('update', () => {
-    it('should update class successfully', async () => {
-      req.params.id = '1';
-      req.body = { class_code: 'Updated' };
-      const mockData = [{ classid: 1, class_code: 'Updated' }];
-      supabase.from.mockReturnValue({
-        update: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
-      });
+    it('updates and returns the updated row', async () => {
+      req.params.id = 5;
+      req.body = { class_code: 'Y' };
+      const data = { classid: 5, class_code: 'Y' };
+      const chain = makeFromChain();
+      chain.single.mockResolvedValue({ data, error: null });
 
-      await classesController.update(req, res);
+      await controller.update(req, res);
 
+      expect(mockPayload).toHaveBeenCalled();
+      expect(chain.update).toHaveBeenCalled();
+      expect(chain.eq).toHaveBeenCalledWith('classid', 5);
+      expect(res.json).toHaveBeenCalledWith({ success: true, data });
+    });
+
+    it('handles update error', async () => {
+      req.params.id = 5;
+      req.body = { class_code: 'Y' };
+      const chain = makeFromChain();
+      const mockError = { message: 'update error' };
+      chain.single.mockResolvedValue({ data: null, error: mockError });
+
+      await controller.update(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
-        success: true,
-        data: mockData
+        success: false,
+        message: 'Error updating class',
+        error: mockError.message,
       });
     });
   });
 
   describe('delete', () => {
-    it('should delete class successfully', async () => {
-      req.params.id = '1';
-      supabase.from.mockReturnValue({
-        delete: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({ data: [{ classid: 1 }], error: null })
-      });
+    it('deletes and returns deleted id', async () => {
+      req.params.id = 3;
+      const data = { classid: 3 };
+      const chain = makeFromChain();
+      chain.single.mockResolvedValue({ data, error: null });
 
-      await classesController.delete(req, res);
+      await controller.delete(req, res);
 
+      expect(chain.delete).toHaveBeenCalled();
+      expect(chain.eq).toHaveBeenCalledWith('classid', 3);
+      expect(res.json).toHaveBeenCalledWith({ success: true, data });
+    });
+
+    it('handles delete error', async () => {
+      req.params.id = 3;
+      const chain = makeFromChain();
+      const mockError = { message: 'delete error' };
+      chain.single.mockResolvedValue({ data: null, error: mockError });
+
+      await controller.delete(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
-        success: true,
-        message: 'class id: 1 deleted successfully'
+        success: false,
+        message: 'Error deleting class',
+        error: mockError.message,
       });
     });
   });

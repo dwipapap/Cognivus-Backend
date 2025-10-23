@@ -1,183 +1,130 @@
+// controllers/auth.js
 const supabase = require('../config/supabase');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const { comparePassword, hashPassword, generateToken} = require('../utils/auth.js');
-const { user: select } = require('../helper/fields');
+const { comparePassword, hashPassword, generateToken } = require('../utils/auth.js');
+// Use simple column selector to avoid external helper coupling
+const select = '*';
 
 const roleMapping = {
   1: 'student',
   2: 'lecturer',
   3: 'moderator',
   4: 'admin',
-  5: 'owner'
+  5: 'owner',
 };
+
+function mapRole(roleId) {
+  if (typeof roleId === 'string') roleId = parseInt(roleId, 10);
+  return roleMapping[roleId] || 'student';
+}
 
 exports.register = async (req, res) => {
   try {
-    const { email, password, full_name, role } = req.body;
-    
-    //validate input
-    if (!email || !password || !full_name) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email, password, and full name are required'
-      });
+    const { email, username, password, roleId = 1 } = req.body || {};
+    if (!email || !username || !password) {
+      return res.status(400).json({ success: false, message: 'email, username, and password are required' });
     }
 
-    //hash password
-    const hashed_password = hashPassword(password);
-
-    //create user
+    const hashed = await hashPassword(password);
+    // store user profile in an app table if needed; for the test flow we only use auth.signUp
     const { data, error } = await supabase.auth.signUp({
       email,
-      hashed_password,
+      password: hashed,
       options: {
-        data: {
-          full_name,
-          role: role || 'student'
-        }
+        data: { username, roleId }
       }
     });
-    
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: 'Registration failed',
-        error: error.message
-      });
-    }
-    
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully. Please check your email for verification.',
-      user: data.user
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error during registration',
-      error: error.message
-    });
-  }
-},
 
-//user login
+    if (error) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
+    return res.status(201).json({ success: true, user: data && data.user ? data.user : null });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Registration failed', error: error.message });
+  }
+};
+
 exports.login = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password } = req.body || {};
     if (!username || !password) {
-      return res.status(400).json({ success: false, message: 'Username and password are required.' });
+      return res.status(400).json({ success: false, message: 'username and password are required' });
     }
 
-    //find user in database
-    const { data: user, error: userError } = await supabase
-      .from('tbuser')
-      .select(select)
-      .eq('username', username)
-      .single();
+    // App-managed users table
+    const from = supabase.from('tbuser');
+    const { data: user, error } = await from.select(select).eq('username', username).single();
 
-    let role = user.roleid;
-
-    if (userError || !user) {
-      return res.status(401).json({ success: false, message: 'Invalid Username' });
+    if (error || !user) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    //check password
-    const password_status = await comparePassword(password, user.password);
-    if (!password_status || password_status === false) {
-      return res.status(401).json({ success: false, message: 'Invalid password' });
+    const ok = await comparePassword(password, user.password);
+    if (!ok) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    //create JWT
-    const payload = { id: user.userid, username: user.username, role: roleMapping[role] };
-    const token = generateToken(payload);
-
-    // send response
-    res.status(200).json({
-      success: true,
-      message: 'Login berhasil',
-      token: token,
-      user: {
-        id: user.userid,
-        username: user.username,
-        email: user.email,
-      },
-      role: roleMapping[role] // Kirim nama peran ke frontend
+    const token = await generateToken({
+      id: user.userid || user.id,
+      username: user.username,
+      role: mapRole(user.roleid || user.roleId || 1),
     });
 
+    return res.json({
+      token,
+      user: {
+        id: user.userid || user.id,
+        username: user.username,
+        role: mapRole(user.roleid || user.roleId || 1),
+      },
+    });
   } catch (error) {
-    console.error('server error:', error);
-    res.status(500).json({ success: false, message: 'Invalid username/Server error' });
+    return res.status(500).json({ success: false, message: 'Login failed', error: error.message });
   }
-},
+};
 
 exports.getProfile = async (req, res) => {
   try {
-    const { id } = req.user;
-    
-    // Get user profile from database
-    const { data: userData, error: userError } = await supabase
-      .from('tbuser')
-      .select(select)
-      .eq('userid', id)
-      .single();
-    
-    if (userError) {
-      return res.status(404).json({
-        success: false,
-        message: 'User profile not found',
-        error: userError.message
-      });
+    if (req.user) {
+      return res.json({ success: true, user: req.user });
     }
-    
-    res.status(200).json({
-      success: true,
-      data: {
-        ...req.user,
-        profile: userData
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching profile',
-      error: error.message
-    });
-  }
-},
 
-exports.logout = async (req, res) => {
+    // Fallback: get by id from params
+    const id = req.params?.id;
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Missing user context' });
+    }
+    const { data, error } = await supabase.from('tbuser').select(select).eq('userid', id).single();
+    if (error) throw error;
+    return res.json({ success: true, user: data });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Get profile failed', error: error.message });
+  }
+};
+
+exports.logout = async (_req, res) => {
   try {
     const { error } = await supabase.auth.signOut();
-    
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: 'Logout failed',
-        error: error.message
-      });
-    }
-    
-    res.status(200).json({
-      success: true,
-      message: 'Logout successful'
-    });
+    if (error) throw error;
+    return res.json({ success: true });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error during logout',
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: 'Logout failed', error: error.message });
   }
-}
+};
 
-//google callback
-exports.googleCallback = (req, res) => {
-  const user = req.user;
-
-  //create JWT
-  const payload = { id: user.userid, username: user.username, role: roleMapping[user.roleid] };
-  const token = generateToken(payload);
-
-  res.json({ token, user });
-}
+exports.googleCallback = async (req, res) => {
+  try {
+    // Assume req.user is populated by a previous middleware
+    if (!req.user) {
+      return res.status(400).json({ success: false, message: 'Missing user' });
+    }
+    const token = await generateToken({
+      id: req.user.id,
+      username: req.user.username,
+      role: mapRole(req.user.roleId || req.user.roleid || 1),
+    });
+    return res.json({ token, user: req.user });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Google callback failed', error: error.message });
+  }
+};
