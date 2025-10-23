@@ -1,115 +1,60 @@
-const request = require('supertest');
-const express = require('express');
 const reportFilesController = require('../../controllers/report_files');
+const supabase = require('../../config/supabase');
 
-// Mock the entire report_files module
-jest.mock('../../controllers/report_files', () => ({
-  getAll: jest.fn(),
-  getById: jest.fn()
-}));
-
-const app = express();
-app.use(express.json());
-
-// Mock routes for testing
-app.get('/report-files', reportFilesController.getAll);
-app.get('/report-files/:id', reportFilesController.getById);
+// Mock dependencies
+jest.mock('../../config/supabase');
 
 describe('Report Files Controller', () => {
+  let req, res;
+
   beforeEach(() => {
+    req = {
+      params: {}
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+  });
+
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('GET /report-files', () => {
+  describe('getAll', () => {
     it('should get all report files successfully', async () => {
-      const mockReportFiles = [
-        {
-          rfid: '1',
-          path: 'reports/midterm-exam.pdf',
-          url: 'https://example.com/files/reports/midterm-exam.pdf',
-          upload_date: '2023-01-15T00:00:00Z'
-        },
-        {
-          rfid: '2',
-          path: 'reports/final-exam.pdf',
-          url: 'https://example.com/files/reports/final-exam.pdf',
-          upload_date: '2023-01-30T00:00:00Z'
-        }
-      ];
-
-      reportFilesController.getAll.mockImplementation((req, res) => {
-        res.status(200).json({
-          success: true,
-          data: mockReportFiles
-        });
+      const mockData = [{ rfid: 1, filename: 'report1.pdf' }];
+      supabase.from.mockResolvedValue({
+        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .get('/report-files');
+      await reportFilesController.getAll(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockReportFiles);
-      expect(response.body.data).toHaveLength(2);
-    });
-
-    it('should handle database errors when fetching all report files', async () => {
-      reportFilesController.getAll.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error fetching report',
-          error: 'Database connection failed'
-        });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData
       });
-
-      const response = await request(app)
-        .get('/report-files');
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error fetching report');
     });
   });
 
-  describe('GET /report-files/:id', () => {
+  describe('getById', () => {
     it('should get report file by id successfully', async () => {
-      const mockReportFile = {
-        rfid: '1',
-        path: 'reports/midterm-exam.pdf',
-        url: 'https://example.com/files/reports/midterm-exam.pdf',
-        upload_date: '2023-01-15T00:00:00Z'
-      };
-
-      reportFilesController.getById.mockImplementation((req, res) => {
-        res.status(200).json({
-          success: true,
-          data: mockReportFile
-        });
+      req.params.id = '1';
+      const mockData = { rfid: 1, filename: 'report1.pdf' };
+      supabase.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .get('/report-files/1');
+      await reportFilesController.getById(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockReportFile);
-    });
-
-    it('should handle database errors when fetching report file by id', async () => {
-      reportFilesController.getById.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error fetching report',
-          error: 'Report file not found'
-        });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData
       });
-
-      const response = await request(app)
-        .get('/report-files/999');
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error fetching report');
     });
   });
 });

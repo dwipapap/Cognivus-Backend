@@ -1,115 +1,58 @@
-const request = require('supertest');
-const express = require('express');
 const courseFilesController = require('../../controllers/course_files');
+const supabase = require('../../config/supabase');
 
-// Mock the entire course_files module
-jest.mock('../../controllers/course_files', () => ({
-  getAll: jest.fn(),
-  getById: jest.fn()
-}));
-
-const app = express();
-app.use(express.json());
-
-// Mock routes for testing
-app.get('/course-files', courseFilesController.getAll);
-app.get('/course-files/:id', courseFilesController.getById);
+// Mock dependencies
+jest.mock('../../config/supabase');
 
 describe('Course Files Controller', () => {
+  let req, res;
+
   beforeEach(() => {
+    req = {
+      params: {}
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+  });
+
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('GET /course-files', () => {
+  describe('getAll', () => {
     it('should get all course files successfully', async () => {
-      const mockCourseFiles = [
-        {
-          cfid: '1',
-          path: 'courses/intro-to-programming.pdf',
-          url: 'https://example.com/files/courses/intro-to-programming.pdf',
-          upload_date: '2023-01-01T00:00:00Z'
-        },
-        {
-          cfid: '2',
-          path: 'courses/data-structures.pdf',
-          url: 'https://example.com/files/courses/data-structures.pdf',
-          upload_date: '2023-01-02T00:00:00Z'
-        }
-      ];
-
-      courseFilesController.getAll.mockImplementation((req, res) => {
-        res.json({
-          success: true,
-          data: mockCourseFiles
-        });
+      const mockData = [{ cfid: 1, filename: 'course1.pdf' }];
+      supabase.from.mockResolvedValue({
+        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .get('/course-files');
+      await courseFilesController.getAll(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockCourseFiles);
-      expect(response.body.data).toHaveLength(2);
-    });
-
-    it('should handle database errors when fetching all course files', async () => {
-      courseFilesController.getAll.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error fetching report',
-          error: 'Database connection failed'
-        });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData
       });
-
-      const response = await request(app)
-        .get('/course-files');
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error fetching report');
     });
   });
 
-  describe('GET /course-files/:id', () => {
+  describe('getById', () => {
     it('should get course file by id successfully', async () => {
-      const mockCourseFile = {
-        cfid: '1',
-        path: 'courses/intro-to-programming.pdf',
-        url: 'https://example.com/files/courses/intro-to-programming.pdf',
-        upload_date: '2023-01-01T00:00:00Z'
-      };
-
-      courseFilesController.getById.mockImplementation((req, res) => {
-        res.json({
-          success: true,
-          data: mockCourseFile
-        });
+      req.params.id = '1';
+      const mockData = { cfid: 1, filename: 'course1.pdf' };
+      supabase.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .get('/course-files/1');
+      await courseFilesController.getById(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockCourseFile);
-    });
-
-    it('should handle database errors when fetching course file by id', async () => {
-      courseFilesController.getById.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error fetching report',
-          error: 'Course file not found'
-        });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData
       });
-
-      const response = await request(app)
-        .get('/course-files/999');
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error fetching report');
     });
   });
 });

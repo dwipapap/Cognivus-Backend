@@ -1,287 +1,133 @@
-const request = require('supertest');
-const express = require('express');
 const teacherLevelController = require('../../controllers/teacher_level');
+const supabase = require('../../config/supabase');
 
-// Mock the entire teacher_level module
-jest.mock('../../controllers/teacher_level', () => ({
-  getAll: jest.fn(),
-  getById: jest.fn(),
-  create: jest.fn(),
-  update: jest.fn(),
-  delete: jest.fn()
-}));
-
-const app = express();
-app.use(express.json());
-
-// Mock routes for testing
-app.get('/teacher-levels', teacherLevelController.getAll);
-app.get('/teacher-levels/:id', teacherLevelController.getById);
-app.post('/teacher-levels', teacherLevelController.create);
-app.put('/teacher-levels/:id', teacherLevelController.update);
-app.delete('/teacher-levels/:id', teacherLevelController.delete);
+// Mock dependencies
+jest.mock('../../config/supabase');
 
 describe('Teacher Level Controller', () => {
+  let req, res;
+
   beforeEach(() => {
+    req = {
+      params: {},
+      body: {}
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+  });
+
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('GET /teacher-levels', () => {
+  describe('getAll', () => {
     it('should get all teacher levels successfully', async () => {
-      const mockTeacherLevels = [
-        {
-          tlid: '1',
-          levelid: '1',
-          lecturerid: '1'
-        },
-        {
-          tlid: '2',
-          levelid: '2',
-          lecturerid: '2'
-        }
-      ];
-
-      teacherLevelController.getAll.mockImplementation((req, res) => {
-        res.json({
-          success: true,
-          data: mockTeacherLevels
-        });
+      const mockData = [{ tlid: 1, classid: 1 }];
+      supabase.from.mockResolvedValue({
+        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .get('/teacher-levels');
+      await teacherLevelController.getAll(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockTeacherLevels);
-      expect(response.body.data).toHaveLength(2);
-    });
-
-    it('should handle database errors when fetching all teacher levels', async () => {
-      teacherLevelController.getAll.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error fetching lecturer on level',
-          error: 'Database connection failed'
-        });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData
       });
-
-      const response = await request(app)
-        .get('/teacher-levels');
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error fetching lecturer on level');
     });
   });
 
-  describe('GET /teacher-levels/:id', () => {
+  describe('getById', () => {
     it('should get teacher level by id successfully', async () => {
-      const mockTeacherLevel = {
-        tlid: '1',
-        levelid: '1',
-        lecturerid: '1'
-      };
-
-      teacherLevelController.getById.mockImplementation((req, res) => {
-        res.json({
-          success: true,
-          data: mockTeacherLevel
-        });
+      req.params.id = '1';
+      const mockData = { tlid: 1, classid: 1 };
+      supabase.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .get('/teacher-levels/1');
+      await teacherLevelController.getById(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockTeacherLevel);
-    });
-
-    it('should handle database errors when fetching teacher level by id', async () => {
-      teacherLevelController.getById.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error fetching lecturer on level',
-          error: 'Teacher level not found'
-        });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData
       });
-
-      const response = await request(app)
-        .get('/teacher-levels/999');
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error fetching lecturer on level');
     });
   });
 
-  describe('POST /teacher-levels', () => {
-    it('should create a new teacher level successfully', async () => {
-      const newTeacherLevel = {
-        tlid: '3',
-        levelid: '3',
-        lecturerid: '3'
-      };
-
-      teacherLevelController.create.mockImplementation((req, res) => {
-        res.status(201).json({
-          success: true,
-          data: newTeacherLevel
-        });
+  describe('create', () => {
+    it('should create teacher level successfully', async () => {
+      req.body = { classid: 1, userid: 1 };
+      const mockData = [{ tlid: 1, classid: 1 }];
+      supabase.from.mockResolvedValue({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .post('/teacher-levels')
-        .send({
-          levelid: '3',
-          lecturerid: '3'
-        });
+      await teacherLevelController.create(req, res);
 
-      expect(response.status).toBe(201);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(newTeacherLevel);
-    });
-
-    it('should handle database errors when creating teacher level', async () => {
-      teacherLevelController.create.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error assigning lecturer on level',
-          error: 'Invalid level or lecturer ID'
-        });
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData[0]
       });
-
-      const response = await request(app)
-        .post('/teacher-levels')
-        .send({
-          levelid: '999',
-          lecturerid: '999'
-        });
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error assigning lecturer on level');
     });
   });
 
-  describe('PUT /teacher-levels/:id', () => {
+  describe('update', () => {
     it('should update teacher level successfully', async () => {
-      const updatedTeacherLevel = {
-        tlid: '1',
-        levelid: '2',
-        lecturerid: '2'
-      };
-
-      teacherLevelController.update.mockImplementation((req, res) => {
-        res.json({
-          success: true,
-          data: updatedTeacherLevel
-        });
+      req.params.id = '1';
+      req.body = { classid: 2 };
+      const mockData = [{ tlid: 1, classid: 2 }];
+      supabase.from.mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .put('/teacher-levels/1')
-        .send({
-          levelid: '2',
-          lecturerid: '2'
-        });
+      await teacherLevelController.update(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(updatedTeacherLevel);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData[0]
+      });
     });
 
-    it('should return 404 for non-existent teacher level update', async () => {
-      teacherLevelController.update.mockImplementation((req, res) => {
-        res.status(404).json({
-          success: false,
-          message: 'Lecturer not found on level.'
-        });
+    it('should return 404 if teacher level not found', async () => {
+      req.params.id = '1';
+      supabase.from.mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockResolvedValue({ data: [], error: null })
       });
 
-      const response = await request(app)
-        .put('/teacher-levels/999')
-        .send({
-          levelid: '1',
-          lecturerid: '1'
-        });
+      await teacherLevelController.update(req, res);
 
-      expect(response.status).toBe(404);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Lecturer not found on level.');
-    });
-
-    it('should handle database errors when updating teacher level', async () => {
-      teacherLevelController.update.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error assigning lecturer on level',
-          error: 'Database connection failed'
-        });
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Lecturer not found on level.'
       });
-
-      const response = await request(app)
-        .put('/teacher-levels/1')
-        .send({
-          levelid: '1',
-          lecturerid: '1'
-        });
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error assigning lecturer on level');
     });
   });
 
-  describe('DELETE /teacher-levels/:id', () => {
+  describe('delete', () => {
     it('should delete teacher level successfully', async () => {
-      teacherLevelController.delete.mockImplementation((req, res) => {
-        res.json({
-          success: true,
-          message: 'lecturer unassigned from level successfully'
-        });
+      req.params.id = '1';
+      supabase.from.mockReturnValue({
+        delete: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockResolvedValue({ data: [{ tlid: 1 }], error: null })
       });
 
-      const response = await request(app)
-        .delete('/teacher-levels/1');
+      await teacherLevelController.delete(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('lecturer unassigned from level successfully');
-    });
-
-    it('should return 404 for non-existent teacher level deletion', async () => {
-      teacherLevelController.delete.mockImplementation((req, res) => {
-        res.status(404).json({
-          success: false,
-          message: 'Lecturer not found from level.'
-        });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'lecturer unassigned from level successfully'
       });
-
-      const response = await request(app)
-        .delete('/teacher-levels/999');
-
-      expect(response.status).toBe(404);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Lecturer not found from level.');
-    });
-
-    it('should handle database errors when deleting teacher level', async () => {
-      teacherLevelController.delete.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error unassign lecturer from level',
-          error: 'Foreign key constraint violation'
-        });
-      });
-
-      const response = await request(app)
-        .delete('/teacher-levels/1');
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error unassign lecturer from level');
     });
   });
 });

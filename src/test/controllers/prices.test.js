@@ -1,293 +1,132 @@
-const request = require('supertest');
-const express = require('express');
 const pricesController = require('../../controllers/prices');
+const supabase = require('../../config/supabase');
 
-// Mock the entire prices module
-jest.mock('../../controllers/prices', () => ({
-  getAll: jest.fn(),
-  getById: jest.fn(),
-  create: jest.fn(),
-  update: jest.fn(),
-  delete: jest.fn()
-}));
-
-const app = express();
-app.use(express.json());
-
-// Mock routes for testing
-app.get('/prices', pricesController.getAll);
-app.get('/prices/:id', pricesController.getById);
-app.post('/prices', pricesController.create);
-app.put('/prices/:id', pricesController.update);
-app.delete('/prices/:id', pricesController.delete);
+// Mock dependencies
+jest.mock('../../config/supabase');
 
 describe('Prices Controller', () => {
+  let req, res;
+
   beforeEach(() => {
+    req = {
+      params: {},
+      body: {}
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+  });
+
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('GET /prices', () => {
+  describe('getAll', () => {
     it('should get all prices successfully', async () => {
-      const mockPrices = [
-        {
-          priceid: '1',
-          levelid: '1',
-          programid: '1',
-          harga: 1500000
-        },
-        {
-          priceid: '2',
-          levelid: '2',
-          programid: '1',
-          harga: 2000000
-        }
-      ];
-
-      pricesController.getAll.mockImplementation((req, res) => {
-        res.json({
-          success: true,
-          data: mockPrices
-        });
+      const mockData = [{ priceid: 1, amount: 100 }];
+      supabase.from.mockResolvedValue({
+        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .get('/prices');
+      await pricesController.getAll(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockPrices);
-      expect(response.body.data).toHaveLength(2);
-    });
-
-    it('should handle database errors when fetching all prices', async () => {
-      pricesController.getAll.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error fetching price',
-          error: 'Database connection failed'
-        });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData
       });
-
-      const response = await request(app)
-        .get('/prices');
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error fetching price');
     });
   });
 
-  describe('GET /prices/:id', () => {
+  describe('getById', () => {
     it('should get price by id successfully', async () => {
-      const mockPrice = {
-        priceid: '1',
-        levelid: '1',
-        programid: '1',
-        harga: 1500000
-      };
-
-      pricesController.getById.mockImplementation((req, res) => {
-        res.json({
-          success: true,
-          data: mockPrice
-        });
+      req.params.id = '1';
+      const mockData = { priceid: 1, amount: 100 };
+      supabase.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .get('/prices/1');
+      await pricesController.getById(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockPrice);
-    });
-
-    it('should handle database errors when fetching price by id', async () => {
-      pricesController.getById.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error fetching price',
-          error: 'Price not found'
-        });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData
       });
-
-      const response = await request(app)
-        .get('/prices/999');
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error fetching price');
     });
   });
 
-  describe('POST /prices', () => {
-    it('should create a new price successfully', async () => {
-      const newPrice = {
-        priceid: '3',
-        levelid: '3',
-        programid: '2',
-        harga: 2500000
-      };
-
-      pricesController.create.mockImplementation((req, res) => {
-        res.status(201).json({
-          success: true,
-          data: newPrice
-        });
+  describe('create', () => {
+    it('should create price successfully', async () => {
+      req.body = { amount: 100 };
+      const mockData = [{ priceid: 1, amount: 100 }];
+      supabase.from.mockResolvedValue({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .post('/prices')
-        .send({
-          levelid: '3',
-          programid: '2',
-          harga: 2500000
-        });
+      await pricesController.create(req, res);
 
-      expect(response.status).toBe(201);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(newPrice);
-    });
-
-    it('should handle database errors when creating price', async () => {
-      pricesController.create.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error creating price',
-          error: 'Invalid level or program ID'
-        });
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData[0]
       });
-
-      const response = await request(app)
-        .post('/prices')
-        .send({
-          levelid: '999',
-          programid: '999',
-          harga: 1000000
-        });
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error creating price');
     });
   });
 
-  describe('PUT /prices/:id', () => {
+  describe('update', () => {
     it('should update price successfully', async () => {
-      const updatedPrice = {
-        priceid: '1',
-        levelid: '1',
-        programid: '1',
-        harga: 1800000
-      };
-
-      pricesController.update.mockImplementation((req, res) => {
-        res.json({
-          success: true,
-          data: updatedPrice
-        });
+      req.params.id = '1';
+      req.body = { amount: 150 };
+      const mockData = [{ priceid: 1, amount: 150 }];
+      supabase.from.mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockResolvedValue({ data: mockData, error: null })
       });
 
-      const response = await request(app)
-        .put('/prices/1')
-        .send({
-          levelid: '1',
-          programid: '1',
-          harga: 1800000
-        });
+      await pricesController.update(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(updatedPrice);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData[0]
+      });
     });
 
-    it('should return 404 for non-existent price update', async () => {
-      pricesController.update.mockImplementation((req, res) => {
-        res.status(404).json({
-          success: false,
-          message: 'Pricelist not found.'
-        });
+    it('should return 404 if price not found', async () => {
+      req.params.id = '1';
+      supabase.from.mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockResolvedValue({ data: [], error: null })
       });
 
-      const response = await request(app)
-        .put('/prices/999')
-        .send({
-          harga: 1000000
-        });
+      await pricesController.update(req, res);
 
-      expect(response.status).toBe(404);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Pricelist not found.');
-    });
-
-    it('should handle database errors when updating price', async () => {
-      pricesController.update.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error updating price',
-          error: 'Database connection failed'
-        });
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Pricelist not found.'
       });
-
-      const response = await request(app)
-        .put('/prices/1')
-        .send({
-          harga: 1500000
-        });
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error updating price');
     });
   });
 
-  describe('DELETE /prices/:id', () => {
+  describe('delete', () => {
     it('should delete price successfully', async () => {
-      pricesController.delete.mockImplementation((req, res) => {
-        res.json({
-          success: true,
-          message: 'price deleted successfully'
-        });
+      req.params.id = '1';
+      supabase.from.mockReturnValue({
+        delete: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockResolvedValue({ data: [{ priceid: 1 }], error: null })
       });
 
-      const response = await request(app)
-        .delete('/prices/1');
+      await pricesController.delete(req, res);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('price deleted successfully');
-    });
-
-    it('should return 404 for non-existent price deletion', async () => {
-      pricesController.delete.mockImplementation((req, res) => {
-        res.status(404).json({
-          success: false,
-          message: 'Pricelist not found.'
-        });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'price deleted successfully'
       });
-
-      const response = await request(app)
-        .delete('/prices/999');
-
-      expect(response.status).toBe(404);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Pricelist not found.');
-    });
-
-    it('should handle database errors when deleting price', async () => {
-      pricesController.delete.mockImplementation((req, res) => {
-        res.status(500).json({
-          success: false,
-          message: 'Error deleting lecturer',
-          error: 'Foreign key constraint violation'
-        });
-      });
-
-      const response = await request(app)
-        .delete('/prices/1');
-
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe('Error deleting lecturer');
     });
   });
 });
