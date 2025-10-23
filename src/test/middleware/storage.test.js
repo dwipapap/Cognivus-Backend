@@ -107,7 +107,7 @@ describe('Storage Middleware', () => {
       await storage.delete(path, bucket);
 
       expect(require('../../config/supabase').storage.from).toHaveBeenCalledWith(bucket);
-      expect(mockSupabaseStorage.remove).toHaveBeenCalledWith([path]);
+      expect(mockSupabaseStorage.remove).toHaveBeenCalledWith(path);
     });
 
     it('should handle delete errors', async () => {

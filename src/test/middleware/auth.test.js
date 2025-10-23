@@ -1,6 +1,16 @@
 const { authenticateToken } = require('../../middleware/auth');
 const { verifyToken } = require('../../utils/auth');
 
+// Mock the auth utils
+jest.mock('../../utils/auth', () => ({
+  verifyToken: jest.fn()
+}));
+
+// Mock supabase
+jest.mock('../../config/supabase', () => ({
+  from: jest.fn()
+}));
+
 describe('Auth Middleware', () => {
   let req, res, next;
 
