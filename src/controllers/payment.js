@@ -59,7 +59,10 @@ exports.webhook = async (req, res) => {
 		const paymentType = notification.payment_type;
 		const grossAmount = notification.gross_amount;
 
+<<<<<<< HEAD
 		// Determine payment status based on Midtrans notification
+=======
+>>>>>>> 78de1c750d40d8ca8cd2e6906ed453bd13547652
 		let paymentStatus = 'pending';
 		
 		if (transactionStatus === 'capture') {
@@ -78,8 +81,12 @@ exports.webhook = async (req, res) => {
 		const { data: existingPayment, error: fetchError } = await supabase
 			.from('tbpayment')
 			.select('*')
+<<<<<<< HEAD
 			.eq('midtrans_orderid', orderId)
 			.single();
+=======
+			.eq('midtrans_orderid', orderId);
+>>>>>>> 78de1c750d40d8ca8cd2e6906ed453bd13547652
 
 		if (existingPayment) {
 			// Update existing payment
@@ -110,14 +117,18 @@ exports.webhook = async (req, res) => {
 		console.error('Webhook error:', error);
 		res.status(500).json({
 			success: false,
-			message: 'midtrans webhook error',
+			message: 'Midtrans webhook error',
 			error
 		})
 	}
 };
 
 // Get payment history for a student
+<<<<<<< HEAD
 exports.getPaymentHistory = async (req, res) => {
+=======
+exports.historyByID = async (req, res) => {
+>>>>>>> 78de1c750d40d8ca8cd2e6906ed453bd13547652
 	try {
 		const { studentid } = req.params;
 
@@ -131,7 +142,37 @@ exports.getPaymentHistory = async (req, res) => {
 
 		return res.status(200).json({
 			success: true,
+<<<<<<< HEAD
 			data: data || []
+=======
+			data
+		});
+	} catch (error) {
+		console.error('Error fetching payment history:', error);
+		return res.status(500).json({
+			success: false,
+			message: 'Error fetching payment history',
+			error
+		});
+	}
+};
+
+// Get payment history for a student
+exports.history = async (req, res) => {
+	try {
+		const { studentid } = req.params;
+
+		const { data, error } = await supabase
+			.from('tbpayment')
+			.select('*')
+			.order('created_at', { ascending: false });
+
+		if (error) throw error;
+
+		return res.status(200).json({
+			success: true,
+			data
+>>>>>>> 78de1c750d40d8ca8cd2e6906ed453bd13547652
 		});
 	} catch (error) {
 		console.error('Error fetching payment history:', error);
